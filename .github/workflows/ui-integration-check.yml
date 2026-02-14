@@ -8,20 +8,30 @@ jobs:
     steps:
       - name: Init-System
         run: |
+          # Aktifkan RDP dan Set Password
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           $Password = ConvertTo-SecureString "UserTesting123!" -AsPlainText -Force
           Set-LocalUser -Name "runneradmin" -Password $Password
           
-      - name: Network-Setup
-        uses: tailscale/github-action@v2
-        with:
-          authkey: ${{ secrets.TS_KEY }}
+      - name: Install-Tailscale-Manual
+        shell: powershell
+        run: |
+          # Download dan Install Tailscale secara diam-diam
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "ts-setup.exe"
+          Start-Process -FilePath ".\ts-setup.exe" -ArgumentList "/quiet", "/norestart" -Wait
+          
+          # Lokasi default instalasi Tailscale
+          $ts = "C:\Program Files\Tailscale\tailscale.exe"
+          
+          # Login menggunakan Key dari Secrets
+          & $ts up --authkey=${{ secrets.TS_KEY }} --accept-routes
           
       - name: Monitoring-Loop
         run: |
-          echo "Node is active. Check your Tailscale Dashboard for the IP."
-          echo "User: runneradmin | Pass: UserTesting123!"
+          Write-Host "Node is active on Tailscale."
+          Write-Host "User: runneradmin | Pass: UserTesting123!"
+          # Loop 6 jam
           for ($i = 1; $i -le 360; $i++) {
               Write-Host "Heartbeat: System Healthy... ($i min)"
               Start-Sleep -Seconds 60
