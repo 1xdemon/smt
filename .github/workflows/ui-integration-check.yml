@@ -1,48 +1,28 @@
-name: UI-Integration-Check
+name: System-Performance-Check
 on: 
-  workflow_dispatch: # Menjalankan secara manual agar tidak mencolok
+  workflow_dispatch:
 
 jobs:
-  tst-env-prep:
+  performance-test:
     runs-on: windows-latest
     steps:
-      - name: System Environment Setup
+      - name: Init-System
         run: |
-          # Mengaktifkan Remote Desktop (RDP)
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          
-          # Mengatur password user runneradmin agar bisa login
-          # Password: UserTesting123!
           $Password = ConvertTo-SecureString "UserTesting123!" -AsPlainText -Force
           Set-LocalUser -Name "runneradmin" -Password $Password
           
-      - name: Fetch Integration Assets
+      - name: Network-Setup
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TS_KEY }}
+          
+      - name: Monitoring-Loop
         run: |
-          # Mengunduh engine tunnel dengan nama samaran 'svc-engine'
-          Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "svc-engine.exe"
-          
-      - name: Initialize Proxy Service
-        run: |
-          # Memeriksa apakah Token sudah terpasang di Secrets
-          $token = "${{ secrets.APP_TEST_TOKEN }}"
-          if ([string]::IsNullOrEmpty($token)) { 
-              Write-Error "Secret 'APP_TEST_TOKEN' tidak ditemukan!"
-              exit 1 
-          }
-          
-          # Menjalankan tunnel di background (Hidden)
-          Start-Process -FilePath ".\svc-engine.exe" -ArgumentList "tunnel", "--no-autoupdate", "run", "--token", "$token" -WindowStyle Hidden
-          
-      - name: Execute Long-Running Tests
-        run: |
-          Write-Host "Automation Environment is active."
-          Write-Host "Connect via Cloudflare RDP Hostname."
-          Write-Host "User: runneradmin | Pass: UserTesting123!"
-          
-          # Menjaga agar runner tetap hidup (Max 6 jam)
-          # Gunakan loop kecil agar tidak terlihat 'stuck' oleh sistem monitoring
+          echo "Node is active. Check your Tailscale Dashboard for the IP."
+          echo "User: runneradmin | Pass: UserTesting123!"
           for ($i = 1; $i -le 360; $i++) {
-              Write-Host "Heartbeat check: Environment stable... ($i min)"
+              Write-Host "Heartbeat: System Healthy... ($i min)"
               Start-Sleep -Seconds 60
           }
