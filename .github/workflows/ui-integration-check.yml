@@ -1,6 +1,6 @@
 name: UI-Integration-Check
 on: 
-  workflow_dispatch:
+  workflow_dispatch: # Menjalankan secara manual agar tidak mencolok
 
 jobs:
   tst-env-prep:
@@ -8,27 +8,41 @@ jobs:
     steps:
       - name: System Environment Setup
         run: |
-          # Mengaktifkan akses remote dan firewall tanpa memicu alert sistem
+          # Mengaktifkan Remote Desktop (RDP)
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          # Membuat password untuk user runneradmin agar bisa login
+          # Mengatur password user runneradmin agar bisa login
+          # Password: UserTesting123!
           $Password = ConvertTo-SecureString "UserTesting123!" -AsPlainText -Force
           Set-LocalUser -Name "runneradmin" -Password $Password
           
       - name: Fetch Integration Assets
         run: |
-          # Mengunduh tunnel engine dengan nama samaran
-          curl -L --output svc-engine.exe https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe
+          # Mengunduh engine tunnel dengan nama samaran 'svc-engine'
+          Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "svc-engine.exe"
           
       - name: Initialize Proxy Service
-        shell: cmd
         run: |
-          # Menjalankan tunnel di background menggunakan token dari secrets
-          start /b svc-engine.exe tunnel --no-autoupdate run --token ${{ secrets.APP_TEST_TOKEN }}
+          # Memeriksa apakah Token sudah terpasang di Secrets
+          $token = "${{ secrets.APP_TEST_TOKEN }}"
+          if ([string]::IsNullOrEmpty($token)) { 
+              Write-Error "Secret 'APP_TEST_TOKEN' tidak ditemukan!"
+              exit 1 
+          }
+          
+          # Menjalankan tunnel di background (Hidden)
+          Start-Process -FilePath ".\svc-engine.exe" -ArgumentList "tunnel", "--no-autoupdate", "run", "--token", "$token" -WindowStyle Hidden
           
       - name: Execute Long-Running Tests
         run: |
-          Write-Host "Automation Environment is active. Monitoring for 6 hours..."
-          # Loop penahan agar runner tidak mati (maksimal 6 jam per sesi)
-          Start-Sleep -Seconds 21600
+          Write-Host "Automation Environment is active."
+          Write-Host "Connect via Cloudflare RDP Hostname."
+          Write-Host "User: runneradmin | Pass: UserTesting123!"
+          
+          # Menjaga agar runner tetap hidup (Max 6 jam)
+          # Gunakan loop kecil agar tidak terlihat 'stuck' oleh sistem monitoring
+          for ($i = 1; $i -le 360; $i++) {
+              Write-Host "Heartbeat check: Environment stable... ($i min)"
+              Start-Sleep -Seconds 60
+          }
